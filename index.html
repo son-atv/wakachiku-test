@@ -10,23 +10,109 @@
     <style>
       body {
         margin: 0;
+        padding: 0;
         overflow: hidden;
+        width: 100vw;
+        height: 100vh;
+        position: relative;
         display: flex;
         align-items: center;
         justify-content: center;
-        height: 100vh;
-        position: relative;
       }
 
-      canvas {
+      #unity-container {
+        width: 100%;
+        height: 100%;
+      }
+
+      #unity-canvas {
+        width: 100%;
+        height: 100%;
         display: block;
         background: #231F20;
+      }
+
+      /* Ensure loading bar is centered */
+      #unity-loading-bar {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        transform: translate(-50%, -50%);
+        z-index: 10;
+      }
+
+    #fullscreen-prompt {
+      position: absolute;
+      top: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      background-color: rgba(0, 0, 0, 0.7);
+      color: white;
+      padding: 10px 20px;
+      border-radius: 5px;
+      font-size: 14px;
+      z-index: 1000;
+      text-align: center;
+      cursor: pointer;
+      transition: opacity 0.5s;
+      opacity: 0;
+    }
+    
+    #fullscreen-prompt.show {
+      opacity: 1;
+    }
+    
+    #fullscreen-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 9999;
+      cursor: pointer;
+    }
+
+      /* Rotation prompt for mobile devices */
+      #rotation-prompt {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background-color: rgba(0, 0, 0, 0.9);
+        color: white;
+        padding: 20px;
+        border-radius: 10px;
+        text-align: center;
+        z-index: 10000;
+        display: none;
+        font-size: 16px;
+        max-width: 300px;
+      }
+
+      #rotation-prompt .rotate-icon {
+        font-size: 48px;
+        margin-bottom: 10px;
+        display: block;
+      }
+
+      /* Hide rotation prompt in landscape mode */
+      @media screen and (orientation: landscape) {
+        #rotation-prompt {
+          display: none !important;
+        }
+      }
+
+      /* Show rotation prompt in portrait mode on mobile */
+      @media screen and (orientation: portrait) and (max-width: 768px) {
+        #rotation-prompt.show-rotation {
+          display: block;
+        }
       }
     </style>
   </head>
   <body>
     <div id="unity-container">
-      <canvas id="unity-canvas" width="960" height="600" tabindex="-1"></canvas>
+      <canvas id="unity-canvas" tabindex="-1"></canvas>
       <div id="unity-loading-bar">
         <div id="logo-container">
           <img id="logo" src="TemplateData/company_name_blue.jpg" alt="Company Logo">
@@ -41,6 +127,16 @@
       </div>
       <div id="unity-warning"> </div>
     </div>
+    
+    <div id="fullscreen-prompt">
+      Click anywhere to enter fullscreen mode
+    </div>
+
+    <div id="rotation-prompt">
+      <span class="rotate-icon">📱↻</span>
+      <p>Please rotate your device to landscape mode for the best experience</p>
+      <small>Tap anywhere to continue</small>
+    </div>
 
     <script>
       window.addEventListener("load", function () {
@@ -53,7 +149,12 @@
         var loadingBar = document.querySelector("#unity-loading-bar");
         var progressBarFull = document.querySelector("#unity-progress-bar-full");
         var warningBanner = document.querySelector("#unity-warning");
-
+        var rotationPrompt = document.querySelector("#rotation-prompt");
+        
+        // Mobile detection
+        var isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+        var isAndroid = /Android/i.test(navigator.userAgent);
+        
         // Create a fullscreen overlay that will be shown briefly
         var fullscreenOverlay = document.createElement('div');
         fullscreenOverlay.id = 'fullscreen-overlay';
@@ -66,6 +167,71 @@
         fullscreenOverlay.style.zIndex = '9999';
         fullscreenOverlay.style.cursor = 'pointer';
         document.body.appendChild(fullscreenOverlay);
+
+        // Set canvas to fill the screen
+        function resizeCanvas() {
+          canvas.width = window.innerWidth;
+          canvas.height = window.innerHeight;
+        }
+        
+        // Call resize on load and when window size changes
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+
+        // Screen orientation functions
+        function lockToLandscape() {
+          if (screen.orientation && screen.orientation.lock) {
+            // Try to lock to landscape
+            screen.orientation.lock('landscape').then(function() {
+              console.log('Screen locked to landscape');
+            }).catch(function(error) {
+              console.log('Screen lock failed:', error);
+              // Fallback: show rotation prompt if in portrait
+              checkOrientationAndPrompt();
+            });
+          } else if (screen.lockOrientation) {
+            // Older API
+            screen.lockOrientation('landscape');
+          } else if (screen.mozLockOrientation) {
+            // Firefox
+            screen.mozLockOrientation('landscape');
+          } else if (screen.msLockOrientation) {
+            // IE/Edge
+            screen.msLockOrientation('landscape');
+          } else {
+            console.log('Screen orientation lock not supported');
+            // Show rotation prompt if needed
+            checkOrientationAndPrompt();
+          }
+        }
+
+        function checkOrientationAndPrompt() {
+          if (isMobile) {
+            var isPortrait = window.innerHeight > window.innerWidth;
+            if (isPortrait) {
+              rotationPrompt.classList.add('show-rotation');
+            } else {
+              rotationPrompt.classList.remove('show-rotation');
+            }
+          }
+        }
+
+        // Handle orientation changes
+        function handleOrientationChange() {
+          setTimeout(function() {
+            resizeCanvas();
+            checkOrientationAndPrompt();
+          }, 100);
+        }
+
+        // Add orientation change listeners
+        window.addEventListener('orientationchange', handleOrientationChange);
+        window.addEventListener('resize', handleOrientationChange);
+
+        // Hide rotation prompt when tapped
+        rotationPrompt.addEventListener('click', function() {
+          rotationPrompt.classList.remove('show-rotation');
+        });
 
         function unityShowBanner(msg, type) {
           function updateBannerVisibility() {
@@ -99,11 +265,23 @@
           showBanner: unityShowBanner,
         };
 
-        if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
+        // Enhanced mobile viewport setup
+        if (isMobile) {
           var meta = document.createElement('meta');
           meta.name = 'viewport';
-          meta.content = 'width=device-width, height=device-height, initial-scale=1.0, user-scalable=no, shrink-to-fit=yes';
+          meta.content = 'width=device-width, height=device-height, initial-scale=1.0, user-scalable=no, shrink-to-fit=yes, viewport-fit=cover';
           document.getElementsByTagName('head')[0].appendChild(meta);
+          
+          // Add mobile-specific meta tags
+          var appleMeta = document.createElement('meta');
+          appleMeta.name = 'apple-mobile-web-app-capable';
+          appleMeta.content = 'yes';
+          document.getElementsByTagName('head')[0].appendChild(appleMeta);
+          
+          var appleStatusBar = document.createElement('meta');
+          appleStatusBar.name = 'apple-mobile-web-app-status-bar-style';
+          appleStatusBar.content = 'black-translucent';
+          document.getElementsByTagName('head')[0].appendChild(appleStatusBar);
         }
 
         loadingBar.style.display = "block";
@@ -119,29 +297,38 @@
           }).then((unityInstance) => {
             loadingBar.style.display = "none";
             window.unityInstance = unityInstance;
-
+            
+            // Auto-trigger fullscreen attempts
             attemptAutoFullscreen();
+            
+            // Lock to landscape on mobile devices
+            if (isMobile) {
+              setTimeout(function() {
+                lockToLandscape();
+              }, 500);
+            }
           }).catch((message) => {
             alert(message);
           });
         };
         document.body.appendChild(script);
+        
         // Function to request fullscreen
         function requestFullscreen() {
-          // Different browsers have different fullscreen methods
           var element = document.documentElement;
           
           if (element.requestFullscreen) {
             element.requestFullscreen();
-          } else if (element.mozRequestFullScreen) { // Firefox
+          } else if (element.mozRequestFullScreen) {
             element.mozRequestFullScreen();
-          } else if (element.webkitRequestFullscreen) { // Chrome, Safari and Opera
+          } else if (element.webkitRequestFullscreen) {
             element.webkitRequestFullscreen();
-          } else if (element.msRequestFullscreen) { // IE/Edge
+          } else if (element.msRequestFullscreen) {
             element.msRequestFullscreen();
           }
         }
-
+        
+        // Function to check if we're in fullscreen mode
         function isFullscreen() {
           return !!(
             document.fullscreenElement ||
@@ -151,6 +338,7 @@
           );
         }
         
+        // Attempt multiple strategies to go fullscreen automatically
         function attemptAutoFullscreen() {
           // Strategy 1: Try direct request (might not work without interaction)
           requestFullscreen();
@@ -163,17 +351,18 @@
           }, 1000);
           
           // Strategy 3: Simulate a user click on the overlay
-          // This creates a semi-transparent overlay that will trigger fullscreen when clicked
-          // The overlay will automatically "click itself" but browsers may detect this isn't a real user interaction
           fullscreenOverlay.addEventListener('click', function() {
             requestFullscreen();
             fullscreenOverlay.style.display = 'none';
+            // Also try to lock orientation when entering fullscreen
+            if (isMobile) {
+              setTimeout(lockToLandscape, 100);
+            }
           });
           
-          // Attempt to programmatically trigger a click (may not work in all browsers)
+          // Attempt to programmatically trigger a click
           setTimeout(function() {
             try {
-              // Create and dispatch a MouseEvent
               var clickEvent = new MouseEvent('click', {
                 view: window,
                 bubbles: true,
@@ -184,6 +373,62 @@
               console.log("Auto-click failed:", e);
             }
           }, 500);
+          
+          // Strategy 4: Auto-hide the overlay after a short time
+          setTimeout(function() {
+            if (fullscreenOverlay.style.display !== 'none') {
+              fullscreenOverlay.style.display = 'none';
+            }
+          }, 2000);
+        }
+        
+        // Add a keyboard listener to toggle fullscreen with F11 or Escape
+        document.addEventListener('keydown', function(e) {
+          if (e.key === 'F11') {
+            e.preventDefault();
+            if (!isFullscreen()) {
+              requestFullscreen();
+            }
+          } else if (e.key === 'Escape' && isFullscreen()) {
+            if (document.exitFullscreen) {
+              document.exitFullscreen();
+            } else if (document.mozCancelFullScreen) {
+              document.mozCancelFullScreen();
+            } else if (document.webkitExitFullscreen) {
+              document.webkitExitFullscreen();
+            } else if (document.msExitFullscreen) {
+              document.msExitFullscreen();
+            }
+          }
+        });
+
+        // Show the fullscreen prompt after a short delay if fullscreen wasn't achieved
+        setTimeout(function() {
+          if (!isFullscreen()) {
+            var prompt = document.getElementById('fullscreen-prompt');
+            prompt.classList.add('show');
+            
+            // Hide the prompt after 5 seconds
+            setTimeout(function() {
+              prompt.classList.remove('show');
+            }, 5000);
+            
+            // Add click listener to the entire document
+            document.addEventListener('click', function fullscreenClick() {
+              requestFullscreen();
+              prompt.classList.remove('show');
+              document.removeEventListener('click', fullscreenClick);
+              // Try to lock orientation when entering fullscreen
+              if (isMobile) {
+                setTimeout(lockToLandscape, 100);
+              }
+            });
+          }
+        }, 2500);
+
+        // Initial orientation check for mobile
+        if (isMobile) {
+          setTimeout(checkOrientationAndPrompt, 1000);
         }
       });
     </script>
