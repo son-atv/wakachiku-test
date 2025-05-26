@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en-us">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <title>浚渫シミュレーター</title>
+    <link rel="shortcut icon" href="TemplateData/favicon.ico">
+    <link rel="stylesheet" href="TemplateData/style.css">
+    <link rel="manifest" href="manifest.webmanifest">
+    <style>
+      body {
+        margin: 0;
+        overflow: hidden;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        height: 100vh;
+        position: relative;
+      }
+
+      canvas {
+        display: block;
+        background: #231F20;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="unity-container">
+      <canvas id="unity-canvas" width="960" height="600" tabindex="-1"></canvas>
+      <div id="unity-loading-bar">
+        <div id="logo-container">
+          <img id="logo" src="TemplateData/company_name_blue.jpg" alt="Company Logo">
+          <img id="logo" src="TemplateData/triarrow-logo-2024.png" alt="Tri-Arrow Logo">
+        </div>
+        <div id="unity-progress-bar-empty">
+          <div id="unity-progress-bar-full">
+            <img id="boat-icon" src="TemplateData/icon_loading_wakachiku.png" alt="Boat Icon">
+          </div>
+        </div>
+        <p id="loading-text">Now Loading...</p>
+      </div>
+      <div id="unity-warning"> </div>
+    </div>
+
+    <script>
+      window.addEventListener("load", function () {
+        if ("serviceWorker" in navigator) {
+          navigator.serviceWorker.register("ServiceWorker.js");
+        }
+
+        var container = document.querySelector("#unity-container");
+        var canvas = document.querySelector("#unity-canvas");
+        var loadingBar = document.querySelector("#unity-loading-bar");
+        var progressBarFull = document.querySelector("#unity-progress-bar-full");
+        var warningBanner = document.querySelector("#unity-warning");
+
+        // Create a fullscreen overlay that will be shown briefly
+        var fullscreenOverlay = document.createElement('div');
+        fullscreenOverlay.id = 'fullscreen-overlay';
+        fullscreenOverlay.style.position = 'absolute';
+        fullscreenOverlay.style.top = '0';
+        fullscreenOverlay.style.left = '0';
+        fullscreenOverlay.style.width = '100%';
+        fullscreenOverlay.style.height = '100%';
+        fullscreenOverlay.style.backgroundColor = 'rgba(0,0,0,0.01)';
+        fullscreenOverlay.style.zIndex = '9999';
+        fullscreenOverlay.style.cursor = 'pointer';
+        document.body.appendChild(fullscreenOverlay);
+
+        function unityShowBanner(msg, type) {
+          function updateBannerVisibility() {
+            warningBanner.style.display = warningBanner.children.length ? 'block' : 'none';
+          }
+          var div = document.createElement('div');
+          div.innerHTML = msg;
+          warningBanner.appendChild(div);
+          if (type == 'error') div.style = 'background: red; padding: 10px;';
+          else {
+            if (type == 'warning') div.style = 'background: yellow; padding: 10px;';
+            setTimeout(function() {
+              warningBanner.removeChild(div);
+              updateBannerVisibility();
+            }, 5000);
+          }
+          updateBannerVisibility();
+        }
+
+        var buildUrl = "Build";
+        var loaderUrl = buildUrl + "/UnityBuild.loader.js";
+        var config = {
+          arguments: [],
+          dataUrl: buildUrl + "/UnityBuild.data.unityweb",
+          frameworkUrl: buildUrl + "/UnityBuild.framework.js.unityweb",
+          codeUrl: buildUrl + "/UnityBuild.wasm.unityweb",
+          streamingAssetsUrl: "StreamingAssets",
+          companyName: "tac",
+          productName: "wakachiku",
+          productVersion: "0.1",
+          showBanner: unityShowBanner,
+        };
+
+        if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
+          var meta = document.createElement('meta');
+          meta.name = 'viewport';
+          meta.content = 'width=device-width, height=device-height, initial-scale=1.0, user-scalable=no, shrink-to-fit=yes';
+          document.getElementsByTagName('head')[0].appendChild(meta);
+        }
+
+        loadingBar.style.display = "block";
+
+        var script = document.createElement("script");
+        script.src = loaderUrl;
+        script.onload = () => {
+          createUnityInstance(canvas, config, (progress) => {
+            const maxProgressWidth = 100 * progress;
+            progressBarFull.style.width = maxProgressWidth + "%";
+            const boatPosition = Math.min(80, Math.max(20, 100 * progress - 20));
+            document.getElementById("boat-icon").style.left = boatPosition + "%";
+          }).then((unityInstance) => {
+            loadingBar.style.display = "none";
+            window.unityInstance = unityInstance;
+
+            attemptAutoFullscreen();
+          }).catch((message) => {
+            alert(message);
+          });
+        };
+        document.body.appendChild(script);
+        // Function to request fullscreen
+        function requestFullscreen() {
+          // Different browsers have different fullscreen methods
+          var element = document.documentElement;
+          
+          if (element.requestFullscreen) {
+            element.requestFullscreen();
+          } else if (element.mozRequestFullScreen) { // Firefox
+            element.mozRequestFullScreen();
+          } else if (element.webkitRequestFullscreen) { // Chrome, Safari and Opera
+            element.webkitRequestFullscreen();
+          } else if (element.msRequestFullscreen) { // IE/Edge
+            element.msRequestFullscreen();
+          }
+        }
+
+        function isFullscreen() {
+          return !!(
+            document.fullscreenElement ||
+            document.mozFullScreenElement ||
+            document.webkitFullscreenElement ||
+            document.msFullscreenElement
+          );
+        }
+        
+        function attemptAutoFullscreen() {
+          // Strategy 1: Try direct request (might not work without interaction)
+          requestFullscreen();
+          
+          // Strategy 2: Use a timeout to try again after a short delay
+          setTimeout(function() {
+            if (!isFullscreen()) {
+              requestFullscreen();
+            }
+          }, 1000);
+          
+          // Strategy 3: Simulate a user click on the overlay
+          // This creates a semi-transparent overlay that will trigger fullscreen when clicked
+          // The overlay will automatically "click itself" but browsers may detect this isn't a real user interaction
+          fullscreenOverlay.addEventListener('click', function() {
+            requestFullscreen();
+            fullscreenOverlay.style.display = 'none';
+          });
+          
+          // Attempt to programmatically trigger a click (may not work in all browsers)
+          setTimeout(function() {
+            try {
+              // Create and dispatch a MouseEvent
+              var clickEvent = new MouseEvent('click', {
+                view: window,
+                bubbles: true,
+                cancelable: true
+              });
+              fullscreenOverlay.dispatchEvent(clickEvent);
+            } catch (e) {
+              console.log("Auto-click failed:", e);
+            }
+          }, 500);
+        }
+      });
+    </script>
+  </body>
+</html>
